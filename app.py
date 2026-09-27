@@ -38,14 +38,14 @@ CUSTOM_CSS = """
   color: var(--neon); text-shadow: 0 0 10px rgba(57,255,20,0.9), 0 0 2px #fff;
 }
 .sharq-header p {
-  color: var(--royal); text-shadow: 0 1px 0 rgba(255,255,255,0.35), 0 0 4px rgba(51,82,255,0.25);
+  color: var(--neon); text-shadow: 0 0 6px rgba(57,255,20,0.7);
   margin-top:0.3rem; font-size:1.15rem; font-weight:700;
 }
 /* Streamlit subheaders (e.g. "Register a New Panel") -- bigger than the subtitle above,
    but smaller than the main SHARQ PROBUILD title */
 h3 {
-  color: var(--royal-deep) !important;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  color: var(--neon) !important;
+  text-shadow: 0 0 6px rgba(57,255,20,0.7) !important;
   font-size: 1.7rem !important; font-weight: 800 !important;
 }
 
@@ -58,7 +58,7 @@ h3 {
   padding: 1.2rem; margin-bottom: 1rem;
   backdrop-filter: blur(4px);
 }
-.panel-card p, .panel-card strong { color:#eef2ff; text-shadow:none; }
+.panel-card p, .panel-card strong { color: var(--neon); text-shadow: 0 0 6px rgba(57,255,20,0.6); }
 
 .warranty-box {
   background: linear-gradient(150deg, rgba(255,255,255,0.18), rgba(255,255,255,0.02) 40%, rgba(0,0,0,0.08)), rgba(15,44,82,0.75);
@@ -72,11 +72,19 @@ h3 {
 
 .credit-footer {
   text-align:center; font-size:0.72rem; margin-top:2rem; letter-spacing:0.5px;
-  color: var(--royal-deep); text-shadow: 0 1px 0 rgba(255,255,255,0.5); font-weight:600;
+  color: var(--neon); text-shadow: 0 0 5px rgba(57,255,20,0.6); font-weight:600;
 }
 
-/* Text elements: royal blue with soft glow, matches reference brand */
-p, label, .stMarkdown, .stCaption, span { color: var(--royal); }
+/* All text outside the buttons: neon green with the same glow as the SHARQ PROBUILD title */
+p, label, h1, h2, h4, h5, h6, .stMarkdown, .stCaption, span {
+  color: var(--neon);
+  text-shadow: 0 0 6px rgba(57,255,20,0.6);
+}
+/* Text INSIDE buttons stays royal blue, bold, no glow -- matches the chrome button reference */
+.stButton *, .stDownloadButton *, .stFormSubmitButton *, .stLinkButton * {
+  color: var(--royal-deep) !important;
+  text-shadow: none !important;
+}
 
 /* Buttons: gradient chrome with neon border and glow (matches reference button shape) */
 .stButton>button, .stDownloadButton>button, .stFormSubmitButton>button, .stLinkButton>a {
