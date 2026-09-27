@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from modules import storage_utils, excel_utils, qr_utils, ai_assistant
 
-st.set_page_config(page_title="SHARQ", page_icon="⚡", layout="centered")
+st.set_page_config(page_title="SHARQ PROBUILD", page_icon="⚡", layout="centered")
 
 # ---------- SHARQ chrome / neon glassy theme (background image + opacity, colors, button shape) ----------
 CUSTOM_CSS = """
@@ -34,12 +34,19 @@ CUSTOM_CSS = """
 
 .sharq-header {text-align:center; padding: 0.5rem 0 1rem 0;}
 .sharq-header h1 {
-  font-size: 1.9rem; letter-spacing: 2px; margin-bottom:0;
-  color: var(--neon); text-shadow: 0 0 6px rgba(57,255,20,0.85), 0 0 1px #fff;
+  font-size: 2.5rem; letter-spacing: 2px; margin-bottom:0;
+  color: var(--neon); text-shadow: 0 0 10px rgba(57,255,20,0.9), 0 0 2px #fff;
 }
 .sharq-header p {
   color: var(--royal); text-shadow: 0 1px 0 rgba(255,255,255,0.35), 0 0 4px rgba(51,82,255,0.25);
-  margin-top:0.2rem; font-size:0.9rem; font-weight:600;
+  margin-top:0.3rem; font-size:1.15rem; font-weight:700;
+}
+/* Streamlit subheaders (e.g. "Register a New Panel") -- bigger than the subtitle above,
+   but smaller than the main SHARQ PROBUILD title */
+h3 {
+  color: var(--royal-deep) !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  font-size: 1.7rem !important; font-weight: 800 !important;
 }
 
 /* Glossy chrome panel with neon glow border (used for cards / info boxes) */
@@ -114,14 +121,14 @@ def get_base_url():
 def render_client_view(panel_id: str):
     meta = storage_utils.load_panel_metadata(panel_id)
     if meta is None:
-        st.markdown("<div class='sharq-header'><h1>SHARQ</h1></div>", unsafe_allow_html=True)
+        st.markdown("<div class='sharq-header'><h1>SHARQ PROBUILD</h1></div>", unsafe_allow_html=True)
         st.error("Panel not found. Please contact the technical department.")
         footer()
         return
 
     st.markdown(
         f"""<div class="sharq-header">
-        <h1>SHARQ</h1>
+        <h1>SHARQ PROBUILD</h1>
         <p>Panel: <b>{meta.get('panel_name','')}</b> &nbsp;|&nbsp; ID: {panel_id}</p>
         </div>""",
         unsafe_allow_html=True,
@@ -211,7 +218,7 @@ def render_client_view(panel_id: str):
 # =========================================================
 def render_admin_view():
     st.markdown(
-        """<div class="sharq-header"><h1>SHARQ</h1>
+        """<div class="sharq-header"><h1>SHARQ PROBUILD</h1>
         <p>Technical Panel Management Dashboard</p></div>""",
         unsafe_allow_html=True,
     )
