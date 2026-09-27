@@ -1,0 +1,7 @@
+streamlit>=1.38
+pandas
+openpyxl
+pypdf
+qrcode[pil]
+Pillow
+requests
