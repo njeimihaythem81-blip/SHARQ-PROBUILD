@@ -1,11 +1,12 @@
 """
 FREE local "grounded assistant" — no external AI API, no internet call, no cost.
 
-This module never calls any language model. It only searches, verbatim, inside:
-  1) the panel's approved Excel parts list (Part Number / Description / Quantity), and
-  2) the extracted text of the panel's PDF diagram.
+This module never calls any language model. It only searches, verbatim, inside
+the panel's approved Excel parts list (Part Number / Description / Quantity).
+The diagram file (PDF or image) is for display/download only and is never read
+for text, by design -- this keeps the assistant fast, free, and hallucination-free.
 
-Because it only returns data that literally exists in these two sources, it cannot
+Because it only returns data that literally exists in the Excel file, it cannot
 hallucinate, guess, or use outside knowledge by construction -- there is no generative
 step at all. If nothing matches, it returns the fixed refusal message.
 """
@@ -54,24 +55,7 @@ def _match_row(question_lower: str, question_tokens: set, rows: list):
     return best_row, best_score
 
 
-def _search_pdf_text(question_tokens: set, pdf_text: str):
-    """Verbatim snippet lookup inside the diagram's extracted text -- never generated,
-    only copied from the source, so it stays 100% faithful to the approved PDF."""
-    if not pdf_text:
-        return None
-    lower_text = pdf_text.lower()
-    for token in sorted(question_tokens, key=len, reverse=True):
-        if len(token) < 3:
-            continue
-        idx = lower_text.find(token)
-        if idx != -1:
-            start, end = max(0, idx - 80), min(len(pdf_text), idx + 80)
-            snippet = pdf_text[start:end].strip().replace("\n", " ")
-            return f'Found in the panel diagram text: "...{snippet}..."'
-    return None
-
-
-def ask_local(question: str, excel_rows: list, pdf_text: str) -> str:
+def ask_local(question: str, excel_rows: list) -> str:
     q_lower = (question or "").strip().lower()
     q_tokens = _tokens(q_lower)
 
@@ -87,9 +71,5 @@ def ask_local(question: str, excel_rows: list, pdf_text: str) -> str:
         if wants_desc and not wants_qty:
             return f"{part}: {desc}."
         return f"{part} — {desc} — Quantity: {qty}."
-
-    pdf_hit = _search_pdf_text(q_tokens, pdf_text)
-    if pdf_hit:
-        return pdf_hit
 
     return REFUSAL_MESSAGE
