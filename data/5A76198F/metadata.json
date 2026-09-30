@@ -5,5 +5,8 @@
   "warranty_months": 12,
   "excel_path": "data/5A76198F/parts.xlsx",
   "pdf_path": "data/5A76198F/diagram.pdf",
-  "created_at": "2026-09-29T22:52:33.815094"
+  "created_at": "2026-09-29T22:52:33.815094",
+  "verified": true,
+  "notes_public": "Main panel board  location in the electrical room . Contains ats  suppliying the ups 1 and 2 via bypass 1 and bypass2 .  Receiving  supply to  main output busbar for feeders and CBS from ups 1 and ups2 via bypass 1 and bypass 2  outputs ",
+  "notes_admin": "Need to change diagram to add ups and bypass involvement "
 }
