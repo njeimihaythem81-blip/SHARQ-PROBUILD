@@ -6,6 +6,13 @@
       "panel_id": "5A76198F",
       "action": "login",
       "detail": ""
+    },
+    {
+      "timestamp": "2026-10-02T13:49:58.703942",
+      "employee": "Mohamed galawi",
+      "panel_id": "D435E3BF",
+      "action": "login",
+      "detail": ""
     }
   ]
 }
