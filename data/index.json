@@ -1,3 +1,10 @@
 {
-  "panels": []
+  "panels": [
+    {
+      "panel_id": "D435E3BF",
+      "panel_name": "NAPCO MDB",
+      "install_date": "2025-08-29",
+      "warranty_months": 18
+    }
+  ]
 }
