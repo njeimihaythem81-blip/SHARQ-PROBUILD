@@ -1,3 +1,11 @@
 {
-  "panels": []
+  "panels": [
+    {
+      "panel_id": "148D3D56",
+      "panel_name": "NAPCO MDB ",
+      "install_date": "2025-08-29",
+      "warranty_months": 18,
+      "owner_employee": null
+    }
+  ]
 }
