@@ -11,8 +11,8 @@
   "public_image_mime": null,
   "public_pdf_path": null,
   "owner_employee": null,
-  "verified": false,
-  "notes_admin": "",
-  "notes_public": "",
+  "verified": true,
+  "notes_admin": "To be reorganized",
+  "notes_public": "PROJECT : NAPCO \nLOCATION : KRARIM  I ZONE MISRATA",
   "created_at": "2026-10-03T05:22:46.185166"
 }
