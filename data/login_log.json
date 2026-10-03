@@ -13,6 +13,13 @@
       "panel_id": "D435E3BF",
       "action": "login",
       "detail": ""
+    },
+    {
+      "timestamp": "2026-10-03T05:45:23.163816",
+      "employee": "Njeimi haytham",
+      "panel_id": "-",
+      "action": "login",
+      "detail": ""
     }
   ]
 }
