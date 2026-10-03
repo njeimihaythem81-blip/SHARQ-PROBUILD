@@ -24,3 +24,19 @@ def image_to_bytes(img: Image.Image) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
+
+
+def decode_qr_from_image(image_bytes: bytes):
+    """Reads a QR code from an uploaded photo (e.g. one a client sent) and returns
+    the decoded text (the panel URL), or None if no QR code was found. Uses
+    OpenCV's built-in detector -- no system libraries or paid services needed."""
+    import cv2
+    import numpy as np
+
+    arr = np.frombuffer(image_bytes, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return None
+    detector = cv2.QRCodeDetector()
+    data, points, _ = detector.detectAndDecode(img)
+    return data if data else None
