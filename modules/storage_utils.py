@@ -112,25 +112,29 @@ def _load_index() -> dict:
     return idx if idx else {"panels": []}
 
 
-def create_panel(panel_name, install_date, warranty_months, excel_file, diagram_file) -> str:
-    """diagram_file can be a PDF or an image (jpg/jpeg/png) -- stored as-is, no conversion."""
+def _image_or_pdf_type_mime(filename: str):
+    ext = filename.rsplit(".", 1)[-1].lower()
+    file_type = "image" if ext in ("jpg", "jpeg", "png") else "pdf"
+    mime = {
+        "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "pdf": "application/pdf",
+    }.get(ext, "application/octet-stream")
+    return ext, file_type, mime
+
+
+def create_panel(panel_name, install_date, warranty_months, sld_file, excel_file,
+                  public_image_file=None, public_pdf_file=None, owner_employee: str = None) -> str:
+    """sld_file (technical diagram, PDF or image) and excel_file (BOQ) are required.
+    public_image_file and public_pdf_file are optional and can be added/changed later
+    by the owning employee (owner_employee) or by the admin."""
     panel_id = uuid.uuid4().hex[:8].upper()
     base = f"data/{panel_id}"
 
-    excel_bytes = excel_file.read()
-    diagram_bytes = diagram_file.read()
+    sld_ext, sld_type, sld_mime = _image_or_pdf_type_mime(sld_file.name)
+    sld_path = f"{base}/sld.{sld_ext}"
+    _put_file(sld_path, sld_file.read(), f"SHARQ: add SLD for panel {panel_id}")
 
-    diagram_ext = diagram_file.name.rsplit(".", 1)[-1].lower()
-    diagram_type = "image" if diagram_ext in ("jpg", "jpeg", "png") else "pdf"
-    diagram_mime = {
-        "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "pdf": "application/pdf",
-    }.get(diagram_ext, "application/octet-stream")
-
-    excel_path = f"{base}/parts.xlsx"
-    diagram_path = f"{base}/diagram.{diagram_ext}"
-
-    _put_file(excel_path, excel_bytes, f"SHARQ: add parts list for panel {panel_id}")
-    _put_file(diagram_path, diagram_bytes, f"SHARQ: add diagram for panel {panel_id}")
+    excel_path = f"{base}/boq.xlsx"
+    _put_file(excel_path, excel_file.read(), f"SHARQ: add BOQ for panel {panel_id}")
 
     metadata = {
         "panel_id": panel_id,
@@ -138,25 +142,67 @@ def create_panel(panel_name, install_date, warranty_months, excel_file, diagram_
         "install_date": install_date,
         "warranty_months": warranty_months,
         "excel_path": excel_path,
-        "diagram_path": diagram_path,
-        "diagram_type": diagram_type,
-        "diagram_mime": diagram_mime,
+        "sld_path": sld_path,
+        "sld_type": sld_type,
+        "sld_mime": sld_mime,
+        "public_image_path": None,
+        "public_image_mime": None,
+        "public_pdf_path": None,
+        "owner_employee": owner_employee,
         "verified": False,
         "notes_admin": "",
         "notes_public": "",
         "created_at": datetime.now().isoformat(),
     }
+
+    if public_image_file is not None:
+        ext, _, mime = _image_or_pdf_type_mime(public_image_file.name)
+        path = f"{base}/public_image.{ext}"
+        _put_file(path, public_image_file.read(), f"SHARQ: add public image for panel {panel_id}")
+        metadata["public_image_path"] = path
+        metadata["public_image_mime"] = mime
+
+    if public_pdf_file is not None:
+        path = f"{base}/public_info.pdf"
+        _put_file(path, public_pdf_file.read(), f"SHARQ: add public info PDF for panel {panel_id}")
+        metadata["public_pdf_path"] = path
+
     _save_json(f"{base}/metadata.json", metadata, f"SHARQ: add metadata for panel {panel_id}")
 
     index_data = _load_index()
     index_data["panels"].append(
         {"panel_id": panel_id, "panel_name": panel_name,
-         "install_date": install_date, "warranty_months": warranty_months}
+         "install_date": install_date, "warranty_months": warranty_months,
+         "owner_employee": owner_employee}
     )
     _save_json(INDEX_PATH, index_data, f"SHARQ: index panel {panel_id}")
 
     get_file_bytes.clear()
     return panel_id
+
+
+def update_panel_public_files(panel_id: str, public_image_file=None, public_pdf_file=None):
+    """Owning employee (or admin) can add/replace ONLY the optional public image
+    and public info PDF, at any time after creation. Never touches SLD/BOQ or
+    the panel's core fields (name, install date, warranty)."""
+    meta = load_panel_metadata(panel_id)
+    if not meta:
+        return
+    base = f"data/{panel_id}"
+
+    if public_image_file is not None:
+        ext, _, mime = _image_or_pdf_type_mime(public_image_file.name)
+        path = f"{base}/public_image.{ext}"
+        _put_file(path, public_image_file.read(), f"SHARQ: update public image for panel {panel_id}")
+        meta["public_image_path"] = path
+        meta["public_image_mime"] = mime
+
+    if public_pdf_file is not None:
+        path = f"{base}/public_info.pdf"
+        _put_file(path, public_pdf_file.read(), f"SHARQ: update public info PDF for panel {panel_id}")
+        meta["public_pdf_path"] = path
+
+    _save_json(f"{base}/metadata.json", meta, f"SHARQ: update public files for panel {panel_id}")
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -178,7 +224,13 @@ def delete_panel(panel_id: str):
     """Admin-only in the UI."""
     meta = load_panel_metadata(panel_id)
     if meta:
-        for p in (meta.get("excel_path"), meta.get("diagram_path"), f"data/{panel_id}/metadata.json"):
+        sld_path = meta.get("sld_path") or meta.get("diagram_path") or meta.get("pdf_path")
+        paths = (
+            meta.get("excel_path"), sld_path,
+            meta.get("public_image_path"), meta.get("public_pdf_path"),
+            f"data/{panel_id}/metadata.json",
+        )
+        for p in paths:
             if p:
                 _delete_file(p, f"SHARQ: delete panel {panel_id}")
     index_data = _load_index()
@@ -189,6 +241,13 @@ def delete_panel(panel_id: str):
 
 def list_panels() -> list:
     return _load_index()["panels"]
+
+
+def extract_panel_id_from_text(text: str):
+    """Pulls a panel ID out of a decoded QR URL like '...?panel=5A76198F'."""
+    import re
+    m = re.search(r"[?&]panel=([A-Za-z0-9]+)", text or "")
+    return m.group(1).upper() if m else None
 
 
 def get_excel_rows(excel_path: str) -> list:
@@ -219,8 +278,17 @@ def find_employee(name: str, code: str):
     return None
 
 
+def is_valid_employee_code(code: str) -> bool:
+    """Exactly 6 characters, letters and/or digits."""
+    code = (code or "").strip()
+    return len(code) == 6 and code.isalnum()
+
+
 def save_employee(name: str, code: str, can_upload: bool, allowed_downloads: list):
-    """Admin-only in the UI. Adds a new employee, or updates one with the same name."""
+    """Admin-only in the UI. Adds a new employee, or updates one with the same name.
+    Raises ValueError if the code isn't exactly 6 alphanumeric characters."""
+    if not is_valid_employee_code(code):
+        raise ValueError("Access code must be exactly 6 letters/digits.")
     data = _load_employees()
     existing = next((e for e in data["employees"] if e["name"].strip().lower() == name.strip().lower()), None)
     if existing:
