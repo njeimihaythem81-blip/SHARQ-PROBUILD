@@ -1,3 +1,14 @@
 {
-  "employees": []
+  "employees": [
+    {
+      "name": "Mohamed galawi",
+      "code": "000007",
+      "can_upload": true,
+      "allowed_downloads": [
+        "parts_list",
+        "diagram"
+      ],
+      "contributions": 0
+    }
+  ]
 }
