@@ -5,3 +5,5 @@ pypdf
 qrcode[pil]
 Pillow
 requests
+opencv-python-headless
+numpy
