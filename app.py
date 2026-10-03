@@ -186,38 +186,50 @@ def render_brand_header(subtitle_html: str = "", tagline: bool = True):
     )
 
 
+
 # =========================================================
 #          SHARED: register-a-panel form (admin + employees)
 # =========================================================
 def render_new_panel_form(context_key: str, employee: dict = None):
     st.markdown("#### Register a New Panel")
+    st.caption("SLD and BOQ are required. The public photo and the public info PDF are optional — "
+               "they can also be added later from this same panel's entry.")
     with st.form(f"new_panel_form_{context_key}", clear_on_submit=True):
         panel_name = st.text_input("Panel Name / Number *")
         warranty_months = st.number_input("Warranty Duration (months)", min_value=1, max_value=120, value=12)
         install_date = st.date_input("Installation Date", value=datetime.now())
-        excel_file = st.file_uploader(
-            "Parts List (Excel: Part Number, Description, Quantity) *", type=["xlsx", "xls"]
+        sld_file = st.file_uploader(
+            "SLD — technical diagram (PDF or photo: JPG / PNG) *", type=["pdf", "jpg", "jpeg", "png"]
         )
-        diagram_file = st.file_uploader(
-            "Panel Diagram — PDF or photo (JPG / PNG) *", type=["pdf", "jpg", "jpeg", "png"]
+        excel_file = st.file_uploader(
+            "BOQ — parts list (Excel: Part Number, Description, Quantity) *", type=["xlsx", "xls"]
+        )
+        public_image_file = st.file_uploader(
+            "Public photo of the panel (optional, shown to clients)", type=["jpg", "jpeg", "png"]
+        )
+        public_pdf_file = st.file_uploader(
+            "Public info PDF (optional, shown to clients)", type=["pdf"]
         )
         submitted = st.form_submit_button("Create Panel + Generate QR", use_container_width=True)
 
     if submitted:
-        if not (panel_name and excel_file and diagram_file):
-            st.error("Please fill all required fields and upload both files.")
+        if not (panel_name and sld_file and excel_file):
+            st.error("Please fill the panel name and upload both the SLD and the BOQ.")
             return
         ok, err = excel_utils.validate_excel(excel_file)
         if not ok:
-            st.error(f"Excel file is invalid: {err}")
+            st.error(f"Excel (BOQ) file is invalid: {err}")
             return
         with st.spinner("Saving to GitHub and generating panel..."):
             panel_id = storage_utils.create_panel(
                 panel_name=panel_name,
                 install_date=install_date.isoformat(),
                 warranty_months=warranty_months,
+                sld_file=sld_file,
                 excel_file=excel_file,
-                diagram_file=diagram_file,
+                public_image_file=public_image_file,
+                public_pdf_file=public_pdf_file,
+                owner_employee=employee["name"] if employee else None,
             )
             if employee:
                 storage_utils.increment_contribution(employee["name"])
@@ -226,7 +238,7 @@ def render_new_panel_form(context_key: str, employee: dict = None):
         client_url = f"{get_base_url()}/?panel={panel_id}"
         qr_img = qr_utils.generate_qr(client_url)
         st.success(f"Panel '{panel_name}' created successfully. ID: {panel_id}")
-        st.image(qr_img, caption="Scan to open the panel login page", width=220)
+        st.image(qr_img, caption="Scan to open the client page", width=220)
         st.code(client_url)
         st.download_button(
             "Download QR Code (PNG)",
@@ -249,75 +261,24 @@ def render_floating_upload_section(employee: dict = None):
 
 
 # =========================================================
-#            EMPLOYEE LOGIN GATE (per panel, per session)
+#        PUBLIC CLIENT PAGE (QR scan -- no login at all)
 # =========================================================
-MAX_LOGIN_ATTEMPTS = 5
-LOGIN_LOCKOUT_SECONDS = 120
-
-
-def render_login_gate(panel_id: str, meta: dict):
-    # Vertical breathing room so the title + form sit near the middle of the
-    # screen instead of hugging the very top.
-    st.markdown("<div style='height:8vh;'></div>", unsafe_allow_html=True)
-    render_brand_header(subtitle_html=f"<p>Panel: <b>{meta.get('panel_name','')}</b></p>")
-
-    attempts_key = f"login_attempts_{panel_id}"
-    lock_key = f"login_lock_until_{panel_id}"
-    locked_until = st.session_state.get(lock_key)
-
-    if locked_until and datetime.now() < locked_until:
-        remaining = int((locked_until - datetime.now()).total_seconds())
-        st.error(f"Too many failed attempts. Please try again in {remaining} seconds.")
+def render_public_client_view(panel_id: str):
+    meta = storage_utils.load_panel_metadata(panel_id)
+    if meta is None:
+        render_brand_header(tagline=False)
+        st.error("Panel not found. Please contact the technical department.")
         footer()
         return
 
-    st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
-    st.write("**Employee Login**")
-    with st.form(f"login_form_{panel_id}"):
-        name = st.text_input("Employee Name")
-        code = st.text_input("Access Code", type="password")
-        submitted = st.form_submit_button("Login", use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    render_brand_header(subtitle_html=f"<p>Panel: <b>{meta.get('panel_name','')}</b></p>", tagline=False)
 
-    if submitted:
-        employee = storage_utils.find_employee(name, code)
-        if employee:
-            st.session_state[attempts_key] = 0
-            storage_utils.record_log(employee["name"], panel_id, "login")
-            ui_components.render_processing_animation("ACCESS REQUEST PROCESSING", 3)
-            st.session_state[f"emp_{panel_id}"] = employee
-            st.rerun()
-        else:
-            st.session_state[attempts_key] = st.session_state.get(attempts_key, 0) + 1
-            if st.session_state[attempts_key] >= MAX_LOGIN_ATTEMPTS:
-                st.session_state[lock_key] = datetime.now() + timedelta(seconds=LOGIN_LOCKOUT_SECONDS)
-                st.session_state[attempts_key] = 0
-                st.error(f"Too many failed attempts. Please try again in {LOGIN_LOCKOUT_SECONDS} seconds.")
-            else:
-                st.error("Invalid name or access code. Please contact the technical department.")
-
-    footer()
-
-
-# =========================================================
-#                 EMPLOYEE DASHBOARD (after login)
-# =========================================================
-def render_employee_dashboard(panel_id: str, meta: dict, employee: dict):
-    render_brand_header(
-        subtitle_html=f"<p>Panel: <b>{meta.get('panel_name','')}</b> &nbsp;|&nbsp; Welcome, {employee['name']}</p>",
-        tagline=False,
-    )
-
-    allowed = employee.get("allowed_downloads", [])
-
-    # ---- Verification badge (visible to everyone, editable by admin only) ----
-    if meta.get("verified"):
-        st.markdown("<div class='verified-badge'>✔ VERIFIED — installation confirmed</div>", unsafe_allow_html=True)
-    else:
-        st.markdown("<div class='verified-badge' style='border-color:#888;'>◻ NOT YET VERIFIED</div>", unsafe_allow_html=True)
-
-    if meta.get("notes_public"):
-        st.markdown(f"<div class='public-note'>{meta['notes_public']}</div>", unsafe_allow_html=True)
+    # ---- Public photo (if the admin/owner uploaded one) ----
+    if meta.get("public_image_path"):
+        st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
+        img_bytes = storage_utils.get_file_bytes(meta["public_image_path"])
+        st.image(img_bytes, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ---- Warranty countdown ----
     install_date = datetime.fromisoformat(meta["install_date"])
@@ -338,104 +299,237 @@ def render_employee_dashboard(panel_id: str, meta: dict, employee: dict):
             unsafe_allow_html=True,
         )
 
-    # ---- Diagram (image shown inline; PDF offered as download) ----
-    if "diagram" in allowed:
+    # ---- Panel ID (to quote to support) ----
+    st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
+    st.write("**Panel Reference Code**")
+    st.code(panel_id)
+    st.caption("Please quote this code when contacting technical support.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---- Public info PDF (download only) ----
+    if meta.get("public_pdf_path"):
         st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
-        st.write("**Panel Diagram**")
-        diagram_bytes = storage_utils.get_file_bytes(meta["diagram_path"])
-        ext = meta["diagram_path"].rsplit(".", 1)[-1]
-        if meta.get("diagram_type") == "image":
-            st.image(diagram_bytes, use_container_width=True)
-        if st.button("⬇ Download Panel Diagram", key="start_dl_diagram"):
-            st.session_state["anim_diagram"] = True
-        if st.session_state.get("anim_diagram"):
+        st.write("**Panel Info Sheet**")
+        pdf_bytes = storage_utils.get_file_bytes(meta["public_pdf_path"])
+        if st.button("⬇ Download Info PDF", key="start_dl_public_pdf"):
+            st.session_state["anim_public_pdf"] = True
+        if st.session_state.get("anim_public_pdf"):
             ui_components.render_animated_download(
-                "Panel Diagram", diagram_bytes, f"{panel_id}_diagram.{ext}", meta["diagram_mime"], key="dl_diagram",
+                "Info PDF", pdf_bytes, f"{panel_id}_info.pdf", "application/pdf", key="dl_public_pdf",
             )
-            st.session_state["anim_diagram"] = False
+            st.session_state["anim_public_pdf"] = False
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---- Parts list (Excel) ----
-    excel_rows = None
-    if "parts_list" in allowed:
-        st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
-        st.write("**Parts List (Excel)**")
-        excel_bytes = storage_utils.get_file_bytes(meta["excel_path"])
-        excel_rows = storage_utils.get_excel_rows(meta["excel_path"])
-        if st.button("⬇ Download Parts List", key="start_dl_excel"):
-            st.session_state["anim_excel"] = True
-        if st.session_state.get("anim_excel"):
-            ui_components.render_animated_download(
-                "Parts List", excel_bytes, f"{panel_id}_parts.xlsx", EXCEL_MIME, key="dl_excel",
-            )
-            st.session_state["anim_excel"] = False
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # ---- WhatsApp support (always available) ----
+    # ---- WhatsApp support ----
     wa_number = st.secrets.get("support_whatsapp_number", "")
     if wa_number:
         wa_text = f"Hello, I need support for panel {panel_id} ({meta.get('panel_name','')})."
         wa_url = f"https://wa.me/{wa_number}?text={wa_text.replace(' ', '%20')}"
         st.link_button("💬 Contact Technical Support (WhatsApp)", wa_url, use_container_width=True)
 
-    st.divider()
+    footer()
 
-    # ---- Grounded assistant (Excel only, requires parts_list permission) ----
-    if "parts_list" in allowed and excel_rows is not None:
-        st.write("**Ask about this panel's parts**")
-        st.caption("Answers are strictly based on the approved Excel parts list for this panel only.")
-        history_key = f"chat_history_{panel_id}"
-        if history_key not in st.session_state:
-            st.session_state[history_key] = []
-        for role, msg in st.session_state[history_key]:
-            with st.chat_message(role):
-                st.write(msg)
-        question = st.chat_input("e.g. How many pieces of part X are in the panel?")
-        if question:
-            st.session_state[history_key].append(("user", question))
-            with st.chat_message("user"):
-                st.write(question)
-            with st.chat_message("assistant"):
-                answer = ai_assistant.ask_local(question=question, excel_rows=excel_rows)
-                st.write(answer)
-            st.session_state[history_key].append(("assistant", answer))
+
+# =========================================================
+#     UNIFIED STAFF LOGIN (separate stable link -- root URL)
+# =========================================================
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_LOCKOUT_SECONDS = 120
+
+
+def render_staff_login():
+    st.markdown("<div style='height:6vh;'></div>", unsafe_allow_html=True)
+    render_brand_header()
+    st.markdown(
+        "<div class='sharq-tagline' style='font-style:normal;'>"
+        "Welcome. Sign in with your name and access code to continue — "
+        "whether you're an administrator or a field technician, this is your starting point."
+        "</div>", unsafe_allow_html=True,
+    )
+
+    lock_key = "staff_login_lock_until"
+    attempts_key = "staff_login_attempts"
+    locked_until = st.session_state.get(lock_key)
+    if locked_until and datetime.now() < locked_until:
+        remaining = int((locked_until - datetime.now()).total_seconds())
+        st.error(f"Too many failed attempts. Please try again in {remaining} seconds.")
+        footer()
+        return
+
+    st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
+    with st.form("staff_login_form"):
+        name = st.text_input("Name")
+        secret = st.text_input("Password / Access Code", type="password")
+        submitted = st.form_submit_button("Login", use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if submitted:
+        if name.strip().lower() == "admin":
+            if secret == st.secrets.get("admin_password", ""):
+                st.session_state[attempts_key] = 0
+                st.session_state.is_admin = True
+                st.rerun()
+            else:
+                _register_staff_failure(attempts_key, lock_key)
+        else:
+            employee = storage_utils.find_employee(name, secret)
+            if employee:
+                st.session_state[attempts_key] = 0
+                storage_utils.record_log(employee["name"], "-", "login")
+                ui_components.render_processing_animation("ACCESS REQUEST PROCESSING", 3)
+                st.session_state["staff_employee"] = employee
+                st.rerun()
+            else:
+                _register_staff_failure(attempts_key, lock_key)
+
+    footer()
+
+
+def _register_staff_failure(attempts_key: str, lock_key: str):
+    st.session_state[attempts_key] = st.session_state.get(attempts_key, 0) + 1
+    if st.session_state[attempts_key] >= MAX_LOGIN_ATTEMPTS:
+        st.session_state[lock_key] = datetime.now() + timedelta(seconds=LOGIN_LOCKOUT_SECONDS)
+        st.session_state[attempts_key] = 0
+        st.error(f"Too many failed attempts. Please try again in {LOGIN_LOCKOUT_SECONDS} seconds.")
     else:
-        st.caption("Ask your administrator for parts-list access to use the technical assistant.")
+        st.error("Invalid name or access code. Please contact the technical department.")
 
-    st.divider()
+
+# =========================================================
+#     EMPLOYEE WORKSPACE (list + search + QR lookup + own uploads)
+# =========================================================
+def _render_panel_entry_for_employee(p: dict, meta: dict, employee: dict):
+    pid = p["panel_id"]
+    allowed = employee.get("allowed_downloads", [])
+    is_owner = meta.get("owner_employee") == employee["name"]
+
+    with st.expander(f"{p['panel_name']}  ·  {pid}" + ("  · ⭐ yours" if is_owner else "")):
+        st.write(f"Installed: {p['install_date']}  |  Warranty: {p['warranty_months']} months")
+        if meta.get("verified"):
+            st.markdown("<div class='verified-badge'>✔ VERIFIED</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div class='verified-badge' style='border-color:#888;'>◻ NOT YET VERIFIED</div>", unsafe_allow_html=True)
+        if meta.get("notes_public"):
+            st.markdown(f"<div class='public-note'>{meta['notes_public']}</div>", unsafe_allow_html=True)
+
+        # ---- SLD download ----
+        sld_path = meta.get("sld_path") or meta.get("diagram_path") or meta.get("pdf_path")
+        if "diagram" in allowed and sld_path:
+            sld_type = meta.get("sld_type") or meta.get("diagram_type", "pdf")
+            sld_mime = meta.get("sld_mime") or meta.get("diagram_mime", "application/pdf")
+            st.write("**SLD (technical diagram)**")
+            sld_bytes = storage_utils.get_file_bytes(sld_path)
+            ext = sld_path.rsplit(".", 1)[-1]
+            if sld_type == "image":
+                st.image(sld_bytes, use_container_width=True)
+            dl_key = f"start_dl_sld_{pid}"
+            if st.button("⬇ Download SLD", key=dl_key):
+                st.session_state[f"anim_sld_{pid}"] = True
+            if st.session_state.get(f"anim_sld_{pid}"):
+                ui_components.render_animated_download(
+                    "SLD", sld_bytes, f"{pid}_sld.{ext}", sld_mime, key=f"dl_sld_{pid}",
+                )
+                st.session_state[f"anim_sld_{pid}"] = False
+
+        # ---- BOQ (Excel) download ----
+        excel_rows = None
+        if "parts_list" in allowed and meta.get("excel_path"):
+            st.write("**BOQ (parts list)**")
+            excel_bytes = storage_utils.get_file_bytes(meta["excel_path"])
+            excel_rows = storage_utils.get_excel_rows(meta["excel_path"])
+            dl_key = f"start_dl_boq_{pid}"
+            if st.button("⬇ Download BOQ", key=dl_key):
+                st.session_state[f"anim_boq_{pid}"] = True
+            if st.session_state.get(f"anim_boq_{pid}"):
+                ui_components.render_animated_download(
+                    "BOQ", excel_bytes, f"{pid}_boq.xlsx", EXCEL_MIME, key=f"dl_boq_{pid}",
+                )
+                st.session_state[f"anim_boq_{pid}"] = False
+
+        # ---- Assistant (BOQ only) ----
+        if excel_rows is not None:
+            st.caption("Ask about this panel's parts (answers come only from its BOQ).")
+            history_key = f"chat_history_{pid}"
+            if history_key not in st.session_state:
+                st.session_state[history_key] = []
+            for role, msg in st.session_state[history_key]:
+                with st.chat_message(role):
+                    st.write(msg)
+            question = st.chat_input("e.g. How many pieces of part X?", key=f"chat_input_{pid}")
+            if question:
+                st.session_state[history_key].append(("user", question))
+                answer = ai_assistant.ask_local(question=question, excel_rows=excel_rows)
+                st.session_state[history_key].append(("assistant", answer))
+                st.rerun()
+
+        # ---- Owner-only: add/update the optional public files ----
+        if is_owner:
+            st.divider()
+            st.caption("You created this panel — you can add or update its public photo and public info PDF "
+                       "at any time (the panel's name, date and warranty can only be changed by the admin).")
+            with st.form(f"public_files_form_{pid}"):
+                new_image = st.file_uploader("Public photo (JPG/PNG)", type=["jpg", "jpeg", "png"], key=f"pi_{pid}")
+                new_pdf = st.file_uploader("Public info PDF", type=["pdf"], key=f"pp_{pid}")
+                save_public = st.form_submit_button("💾 Save public files")
+            if save_public and (new_image or new_pdf):
+                storage_utils.update_panel_public_files(pid, public_image_file=new_image, public_pdf_file=new_pdf)
+                st.success("Updated.")
+                st.rerun()
+
+
+def render_employee_workspace(employee: dict):
+    render_brand_header(subtitle_html=f"<p>Welcome, {employee['name']}</p>", tagline=False)
+
+    panels = storage_utils.list_panels()
+
+    # ---- Search by QR photo ----
+    st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
+    st.write("**Find a panel by its QR photo**")
+    st.caption("If a client sent you a photo of their panel's QR code, upload it here to jump straight to that panel.")
+    qr_photo = st.file_uploader("QR photo", type=["jpg", "jpeg", "png"], key="qr_search_upload")
+    found_panel_id = None
+    if qr_photo is not None:
+        decoded = qr_utils.decode_qr_from_image(qr_photo.read())
+        if decoded:
+            found_panel_id = storage_utils.extract_panel_id_from_text(decoded)
+        if found_panel_id:
+            st.success(f"Found panel: {found_panel_id}")
+        else:
+            st.error("No valid SHARQ QR code found in that photo.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---- Search by name/ID ----
+    search = st.text_input("🔍 Search panels by name or ID").strip().lower()
+
+    filtered = panels
+    if found_panel_id:
+        filtered = [p for p in panels if p["panel_id"] == found_panel_id]
+    elif search:
+        filtered = [p for p in panels if search in p["panel_name"].lower() or search in p["panel_id"].lower()]
+
+    st.subheader(f"Panels ({len(filtered)})")
+    if not filtered:
+        st.info("No panels match.")
+    for p in filtered:
+        meta = storage_utils.load_panel_metadata(p["panel_id"])
+        if meta:
+            _render_panel_entry_for_employee(p, meta, employee)
 
     # ---- Contributions / stars + upload permission ----
     if employee.get("can_upload"):
         contributions = employee.get("contributions", 0)
         stars = contributions // 10
+        st.divider()
         st.write(f"**Your contributions:** {contributions} panels uploaded &nbsp;|&nbsp; **Stars:** {'★' * stars or '—'}")
         render_floating_upload_section(employee=employee)
 
     # ---- Logout ----
     if st.button("Log out", key="logout_button", use_container_width=True):
-        storage_utils.record_log(employee["name"], panel_id, "logout")
-        del st.session_state[f"emp_{panel_id}"]
+        storage_utils.record_log(employee["name"], "-", "logout")
+        del st.session_state["staff_employee"]
         st.rerun()
 
     footer()
-
-
-# =========================================================
-#                     CLIENT ROUTER (per panel)
-# =========================================================
-def render_client_view(panel_id: str):
-    meta = storage_utils.load_panel_metadata(panel_id)
-    if meta is None:
-        render_brand_header(tagline=False)
-        st.error("Panel not found. Please contact the technical department.")
-        footer()
-        return
-
-    session_key = f"emp_{panel_id}"
-    if session_key in st.session_state:
-        render_employee_dashboard(panel_id, meta, st.session_state[session_key])
-    else:
-        render_login_gate(panel_id, meta)
 
 
 # =========================================================
@@ -443,22 +537,6 @@ def render_client_view(panel_id: str):
 # =========================================================
 def render_admin_view():
     render_brand_header(subtitle_html="<p>Technical Panel Management Dashboard</p>")
-
-    if "is_admin" not in st.session_state:
-        st.session_state.is_admin = False
-
-    if not st.session_state.is_admin:
-        with st.form("login_form"):
-            pwd = st.text_input("Admin Password", type="password")
-            submitted = st.form_submit_button("Login", use_container_width=True)
-        if submitted:
-            if pwd == st.secrets.get("admin_password", ""):
-                st.session_state.is_admin = True
-                st.rerun()
-            else:
-                st.error("Incorrect password.")
-        footer()
-        return
 
     tab_panels, tab_employees, tab_log, tab_settings = st.tabs(
         ["📂 Existing Panels", "👥 Employees", "🧾 Login Log", "⚙️ Settings"]
@@ -471,7 +549,6 @@ def render_admin_view():
         if not panels:
             st.info("No panels registered yet. Use the floating ＋ button to add one.")
 
-        # Pre-load metadata once (reused for both the expiring-soon alert and the list below)
         panel_metas = [(p, storage_utils.load_panel_metadata(p["panel_id"])) for p in panels]
 
         # ---- Warranty expiring within 30 days ----
@@ -499,7 +576,8 @@ def render_admin_view():
 
         for p, meta in panel_metas:
             pid = p["panel_id"]
-            with st.expander(f"{p['panel_name']}  ·  {pid}"):
+            owner = meta.get("owner_employee") or "Admin"
+            with st.expander(f"{p['panel_name']}  ·  {pid}  ·  created by {owner}"):
                 client_url = f"{get_base_url()}/?panel={pid}"
                 st.write(f"Installed: {p['install_date']}  |  Warranty: {p['warranty_months']} months")
                 st.code(client_url)
@@ -515,13 +593,19 @@ def render_admin_view():
                     value=meta.get("notes_public", ""), key=f"notes_pub_{pid}",
                 )
                 notes_admin = st.text_area(
-                    "Admin-only note (hidden from employees)",
+                    "Admin-only note (hidden from everyone else)",
                     value=meta.get("notes_admin", ""), key=f"notes_adm_{pid}",
                 )
+                st.caption("Optional public files (shown to clients on the QR page):")
+                new_image = st.file_uploader("Replace public photo", type=["jpg", "jpeg", "png"], key=f"adm_img_{pid}")
+                new_pdf = st.file_uploader("Replace public info PDF", type=["pdf"], key=f"adm_pdf_{pid}")
+
                 if st.button("💾 Save changes", key=f"save_{pid}"):
                     storage_utils.update_panel_meta(
                         pid, verified=verified, notes_public=notes_public, notes_admin=notes_admin,
                     )
+                    if new_image or new_pdf:
+                        storage_utils.update_panel_public_files(pid, public_image_file=new_image, public_pdf_file=new_pdf)
                     st.success("Saved.")
                     st.rerun()
 
@@ -544,22 +628,27 @@ def render_admin_view():
     # ---------------- Employees ----------------
     with tab_employees:
         st.subheader("Add / Update Employee")
+        st.caption("Access code must be exactly 6 letters/digits.")
         with st.form("employee_form", clear_on_submit=True):
             emp_name = st.text_input("Employee Name *")
-            emp_code = st.text_input("Access Code *")
+            emp_code = st.text_input("Access Code (6 characters) *", max_chars=6)
             can_upload = st.checkbox("Allow this employee to upload new panels")
             allowed = st.multiselect(
                 "Allowed downloads", options=["parts_list", "diagram"],
                 default=["parts_list", "diagram"],
+                help="'diagram' refers to the SLD; 'parts_list' refers to the BOQ.",
             )
             emp_submitted = st.form_submit_button("Save Employee", use_container_width=True)
         if emp_submitted:
-            if emp_name and emp_code:
-                storage_utils.save_employee(emp_name, emp_code, can_upload, allowed)
-                st.success(f"Employee '{emp_name}' saved.")
-                st.rerun()
-            else:
+            if not (emp_name and emp_code):
                 st.error("Name and access code are required.")
+            else:
+                try:
+                    storage_utils.save_employee(emp_name, emp_code, can_upload, allowed)
+                    st.success(f"Employee '{emp_name}' saved.")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
 
         st.subheader("Employees")
         employees = storage_utils.list_employees()
@@ -629,6 +718,10 @@ def render_admin_view():
 # =========================================================
 panel_param = st.query_params.get("panel")
 if panel_param:
-    render_client_view(panel_param)
-else:
+    render_public_client_view(panel_param)
+elif st.session_state.get("is_admin"):
     render_admin_view()
+elif "staff_employee" in st.session_state:
+    render_employee_workspace(st.session_state["staff_employee"])
+else:
+    render_staff_login()
