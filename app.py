@@ -16,6 +16,8 @@ CUSTOM_CSS = """
   --panel:rgba(46,48,52,0.62); --panel-2:rgba(70,73,78,0.55);
 }
 #MainMenu, footer {visibility: hidden;}
+[data-testid="stHeader"] {display: none !important;}
+[data-testid="stToolbar"] {display: none !important;}
 
 /* Background: chrome gradient + six panel photos -- 3 stacked on the left, 3 stacked on the right.
    Overlay opacity lowered 0.81 -> 0.76 for another +5% background image visibility. */
@@ -79,6 +81,18 @@ h3 {
   backdrop-filter: blur(4px);
 }
 .warranty-box .days {font-size:2rem; font-weight:700;}
+
+/* Compact warranty pill -- same footprint as a chrome button */
+.warranty-compact {
+  height:46px; display:flex; align-items:center; justify-content:center;
+  border:1.5px solid var(--neon); border-radius:10px;
+  background: rgba(15,44,82,0.75); color: var(--neon);
+  text-shadow: 0 0 5px rgba(57,255,20,0.6); font-weight:700; font-size:0.92rem;
+  margin:0.6rem 0; box-shadow: 0 0 10px rgba(57,255,20,0.3); text-align:center; padding:0 0.6rem;
+}
+.warranty-compact.expired {
+  background: rgba(122,31,43,0.75); border-color:#7a1f2b; color:#ffb3b3; text-shadow:none;
+}
 
 .credit-footer {
   text-align:center; font-size:0.72rem; margin-top:2rem; letter-spacing:0.5px;
@@ -280,25 +294,6 @@ def render_public_client_view(panel_id: str):
         st.image(img_bytes, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---- Warranty countdown ----
-    install_date = datetime.fromisoformat(meta["install_date"])
-    warranty_end = install_date + timedelta(days=30 * int(meta["warranty_months"]))
-    days_left = (warranty_end - datetime.now()).days
-    if days_left >= 0:
-        st.markdown(
-            f"""<div class="warranty-box"><div>Warranty Status</div>
-            <div class="days">{days_left} days left</div>
-            <div>Expires on {warranty_end.strftime('%Y-%m-%d')}</div></div>""",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f"""<div class="warranty-box" style="background:rgba(122,31,43,0.75);">
-            <div>Warranty Status</div><div class="days">EXPIRED</div>
-            <div>Ended on {warranty_end.strftime('%Y-%m-%d')}</div></div>""",
-            unsafe_allow_html=True,
-        )
-
     # ---- Panel ID (to quote to support) ----
     st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
     st.write("**Panel Reference Code**")
@@ -327,6 +322,21 @@ def render_public_client_view(panel_id: str):
         wa_url = f"https://wa.me/{wa_number}?text={wa_text.replace(' ', '%20')}"
         st.link_button("💬 Contact Technical Support (WhatsApp)", wa_url, use_container_width=True)
 
+    # ---- Warranty countdown (compact, below the support button) ----
+    install_date = datetime.fromisoformat(meta["install_date"])
+    warranty_end = install_date + timedelta(days=30 * int(meta["warranty_months"]))
+    days_left = (warranty_end - datetime.now()).days
+    if days_left >= 0:
+        st.markdown(
+            f"""<div class="warranty-compact">⏱ Warranty: {days_left} days left — expires {warranty_end.strftime('%Y-%m-%d')}</div>""",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"""<div class="warranty-compact expired">⏱ Warranty EXPIRED — ended {warranty_end.strftime('%Y-%m-%d')}</div>""",
+            unsafe_allow_html=True,
+        )
+
     footer()
 
 
@@ -343,9 +353,10 @@ def render_staff_login():
     st.markdown(
         "<div class='sharq-tagline' style='font-style:normal;'>"
         "Welcome. Sign in with your name and access code to continue — "
-        "whether you're an administrator or a field technician, this is your starting point."
+        "whether you're a consultant or a field inspector, this is your starting point."
         "</div>", unsafe_allow_html=True,
     )
+    st.caption("Consultants: enter \"Consultant\" as the name, then your password.")
 
     lock_key = "staff_login_lock_until"
     attempts_key = "staff_login_attempts"
@@ -364,7 +375,7 @@ def render_staff_login():
     st.markdown("</div>", unsafe_allow_html=True)
 
     if submitted:
-        if name.strip().lower() == "admin":
+        if name.strip().lower() == "consultant":
             if secret == st.secrets.get("admin_password", ""):
                 st.session_state[attempts_key] = 0
                 st.session_state.is_admin = True
@@ -404,7 +415,19 @@ def _render_panel_entry_for_employee(p: dict, meta: dict, employee: dict):
     is_owner = meta.get("owner_employee") == employee["name"]
 
     with st.expander(f"{p['panel_name']}  ·  {pid}" + ("  · ⭐ yours" if is_owner else "")):
-        st.write(f"Installed: {p['install_date']}  |  Warranty: {p['warranty_months']} months")
+        install_date = datetime.fromisoformat(meta["install_date"])
+        warranty_end = install_date + timedelta(days=30 * int(meta["warranty_months"]))
+        days_left = (warranty_end - datetime.now()).days
+        if days_left >= 0:
+            st.markdown(
+                f"""<div class="warranty-compact">⏱ Warranty: {days_left} days left — expires {warranty_end.strftime('%Y-%m-%d')}</div>""",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f"""<div class="warranty-compact expired">⏱ Warranty EXPIRED — ended {warranty_end.strftime('%Y-%m-%d')}</div>""",
+                unsafe_allow_html=True,
+            )
         if meta.get("verified"):
             st.markdown("<div class='verified-badge'>✔ VERIFIED</div>", unsafe_allow_html=True)
         else:
@@ -539,7 +562,7 @@ def render_admin_view():
     render_brand_header(subtitle_html="<p>Technical Panel Management Dashboard</p>")
 
     tab_panels, tab_employees, tab_log, tab_settings = st.tabs(
-        ["📂 Existing Panels", "👥 Employees", "🧾 Login Log", "⚙️ Settings"]
+        ["📂 Existing Panels", "👥 Inspectors", "🧾 Login Log", "⚙️ Settings"]
     )
 
     # ---------------- Existing Panels ----------------
@@ -576,7 +599,7 @@ def render_admin_view():
 
         for p, meta in panel_metas:
             pid = p["panel_id"]
-            owner = meta.get("owner_employee") or "Admin"
+            owner = meta.get("owner_employee") or "Consultant"
             with st.expander(f"{p['panel_name']}  ·  {pid}  ·  created by {owner}"):
                 client_url = f"{get_base_url()}/?panel={pid}"
                 st.write(f"Installed: {p['install_date']}  |  Warranty: {p['warranty_months']} months")
@@ -589,11 +612,11 @@ def render_admin_view():
                     value=meta.get("verified", False), key=f"verified_{pid}",
                 )
                 notes_public = st.text_area(
-                    "Public note (visible to every employee)",
+                    "Public note (visible to every inspector)",
                     value=meta.get("notes_public", ""), key=f"notes_pub_{pid}",
                 )
                 notes_admin = st.text_area(
-                    "Admin-only note (hidden from everyone else)",
+                    "Consultant-only note (hidden from everyone else)",
                     value=meta.get("notes_admin", ""), key=f"notes_adm_{pid}",
                 )
                 st.caption("Optional public files (shown to clients on the QR page):")
@@ -627,39 +650,39 @@ def render_admin_view():
 
     # ---------------- Employees ----------------
     with tab_employees:
-        st.subheader("Add / Update Employee")
+        st.subheader("Add / Update Inspector")
         st.caption("Access code must be exactly 6 letters/digits.")
         with st.form("employee_form", clear_on_submit=True):
-            emp_name = st.text_input("Employee Name *")
+            emp_name = st.text_input("Inspector Name *")
             emp_code = st.text_input("Access Code (6 characters) *", max_chars=6)
-            can_upload = st.checkbox("Allow this employee to upload new panels")
+            can_upload = st.checkbox("Allow this inspector to upload new panels")
             allowed = st.multiselect(
                 "Allowed downloads", options=["parts_list", "diagram"],
                 default=["parts_list", "diagram"],
                 help="'diagram' refers to the SLD; 'parts_list' refers to the BOQ.",
             )
-            emp_submitted = st.form_submit_button("Save Employee", use_container_width=True)
+            emp_submitted = st.form_submit_button("Save Inspector", use_container_width=True)
         if emp_submitted:
             if not (emp_name and emp_code):
                 st.error("Name and access code are required.")
             else:
                 try:
                     storage_utils.save_employee(emp_name, emp_code, can_upload, allowed)
-                    st.success(f"Employee '{emp_name}' saved.")
+                    st.success(f"Inspector '{emp_name}' saved.")
                     st.rerun()
                 except ValueError as e:
                     st.error(str(e))
 
-        st.subheader("Employees")
+        st.subheader("Inspectors")
         employees = storage_utils.list_employees()
         if not employees:
-            st.info("No employees added yet.")
+            st.info("No inspectors added yet.")
         for e in employees:
             stars = e.get("contributions", 0) // 10
             with st.expander(f"{e['name']}  ·  {'⬆ can upload' if e.get('can_upload') else 'view only'}"):
                 st.write(f"Contributions: {e.get('contributions', 0)} &nbsp;|&nbsp; Stars: {'★' * stars or '—'}")
                 st.write(f"Allowed downloads: {', '.join(e.get('allowed_downloads', [])) or 'none'}")
-                if st.button("🗑 Delete employee", key=f"del_emp_{e['name']}"):
+                if st.button("🗑 Delete inspector", key=f"del_emp_{e['name']}"):
                     storage_utils.delete_employee(e["name"])
                     st.rerun()
 
