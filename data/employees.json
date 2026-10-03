@@ -1,16 +1,6 @@
 {
   "employees": [
     {
-      "name": "Mohamed galawi",
-      "code": "0077",
-      "can_upload": true,
-      "allowed_downloads": [
-        "parts_list",
-        "diagram"
-      ],
-      "contributions": 0
-    },
-    {
       "name": "Abdurahmen ramdhan ",
       "code": "2222",
       "can_upload": true,
