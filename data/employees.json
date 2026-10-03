@@ -1,14 +1,3 @@
 {
-  "employees": [
-    {
-      "name": "Njeimi Haitham ",
-      "code": "SHARQ",
-      "can_upload": true,
-      "allowed_downloads": [
-        "parts_list",
-        "diagram"
-      ],
-      "contributions": 0
-    }
-  ]
+  "employees": []
 }
