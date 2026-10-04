@@ -230,6 +230,13 @@
       "panel_id": "-",
       "action": "logout",
       "detail": ""
+    },
+    {
+      "timestamp": "2026-10-04T12:55:33.378192",
+      "employee": "Njeimi haytham",
+      "panel_id": "-",
+      "action": "login",
+      "detail": ""
     }
   ]
 }
