@@ -258,6 +258,13 @@
       "panel_id": "-",
       "action": "login",
       "detail": ""
+    },
+    {
+      "timestamp": "2026-10-04T21:45:57.769831",
+      "employee": "Mohamed galawi",
+      "panel_id": "-",
+      "action": "login",
+      "detail": ""
     }
   ]
 }
